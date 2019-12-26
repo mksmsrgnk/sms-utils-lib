@@ -23,13 +23,12 @@ func prepareRequest(from, to, text string) string {
 
 func Send(from, to, text string) error {
 	for _, mobPhone := range strings.Split(to, ",") {
-		if resp, err := http.Get(prepareRequest(from, to, text)); err == nil {
-			if resp.StatusCode != http.StatusAccepted {
-				return fmt.Errorf("can't send message to: %s, response code %d", mobPhone, resp.StatusCode)
-			}
-			return fmt.Errorf("message to: %s has been accepted for delivery!, %d", mobPhone, resp.StatusCode)
-		} else {
+		resp, err := http.Get(prepareRequest(from, to, text))
+		if err != nil {
 			return fmt.Errorf("SMS message sending error, %v", err)
+		}
+		if resp.StatusCode != http.StatusAccepted {
+			return fmt.Errorf("can't send message to: %s, response code %d", mobPhone, resp.StatusCode)
 		}
 	}
 	return nil
