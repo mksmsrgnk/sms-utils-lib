@@ -3,33 +3,61 @@ package smsutils
 import (
 	"fmt"
 	"net/http"
-	"strings"
+	"net/url"
 )
 
-var (
-	Address  string
+type Kannel struct {
+	URL      string
 	UserName string
 	Password string
-)
-
-func format(text string) string {
-	return strings.Replace(text, " ", "+", -1)
 }
 
-func prepareRequest(from, to, text string) string {
-	return fmt.Sprintf("http://%s/cgi-bin/sendsms?username=%s&password=%s&from=%s&to=%s&text=%s",
-		Address, UserName, Password, from, to, format(text))
+type TextMessage struct {
+	Kannel
+	From string
+	To   string
+	Text string
 }
 
-func Send(from, to, text string) error {
-	for _, mobPhone := range strings.Split(to, ",") {
-		resp, err := http.Get(prepareRequest(from, to, text))
-		if err != nil {
-			return fmt.Errorf("SMS message sending error, %v", err)
-		}
-		if resp.StatusCode != http.StatusAccepted {
-			return fmt.Errorf("can't send message to: %s, response code %d", mobPhone, resp.StatusCode)
-		}
+func NewKannel(userName, password, rawURL string) Kannel {
+	return Kannel{UserName: userName, Password: password, URL: rawURL}
+}
+
+func (k Kannel) NewTextMessage(from, to, text string) TextMessage {
+	return TextMessage{From: from, To: to, Text: text, Kannel: k}
+}
+
+func (t TextMessage) encodeURL() (string, error) {
+	u, err := url.Parse(t.URL)
+	if err != nil {
+		return "", err
+	}
+	params := url.Values{
+		"username": []string{t.UserName},
+		"password": []string{t.Password},
+		"from":     []string{t.From},
+		"to":       []string{t.To},
+		"text":     []string{t.Text},
+	}
+	u.RawQuery = params.Encode()
+	return u.String(), nil
+}
+
+func (t TextMessage) send(rawURL string) error {
+	resp, err := http.Get(rawURL)
+	if err != nil {
+		return fmt.Errorf("can't send message: %v", err)
+	}
+	if resp.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("can't send message to: %s, response code %d", t.To, resp.StatusCode)
 	}
 	return nil
+}
+
+func (t TextMessage) Send() error {
+	req, err := t.encodeURL()
+	if err != nil {
+		return err
+	}
+	return t.send(req)
 }

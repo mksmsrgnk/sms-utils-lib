@@ -1,66 +1,96 @@
 package smsutils
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
 
-func Test_sendSMS(t *testing.T) {
+func TestTextMessage_send(t *testing.T) {
 	type args struct {
-		mobileNum string
-		text      string
+		userName string
+		password string
+		rawURL   string
+		from     string
+		to       string
+		text     string
 	}
 	tests := []struct {
 		name string
 		args args
 	}{
-		{name: "test1", args: args{mobileNum: "+996555555555", text: "test"}},
+		{name: "test1",
+			args: args{
+				userName: "test",
+				password: "test",
+				rawURL:   "http://localhost.localdomain",
+				from:     "1040",
+				to:       "+996555555555",
+				text:     "test"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		})
-	}
-}
-
-func Test_convertMessageText(t *testing.T) {
-	type args struct {
-		text string
-	}
-	tests := []struct {
-		name string
-		args args
-		want string
-	}{
-		{"Message format conversion test", args{text: "message body"}, "message+body"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := format(tt.args.text); got != tt.want {
-				t.Errorf("format() = %v, want %v", got, tt.want)
+			ts := httptest.NewServer(
+				http.HandlerFunc(
+					func(
+						w http.ResponseWriter,
+						r *http.Request) {
+						w.WriteHeader(202)
+					}))
+			defer ts.Close()
+			err := NewKannel(
+				tt.args.userName,
+				tt.args.password,
+				ts.URL).NewTextMessage(
+				tt.args.from,
+				tt.args.to,
+				tt.args.text).Send()
+			if err != nil {
+				t.Error(err)
 			}
 		})
 	}
 }
 
-func Test_prepareRequest(t *testing.T) {
-	type args struct {
-		from string
-		to   string
-		text string
+func TestTextMessage_encodeURL(t1 *testing.T) {
+	type fields struct {
+		Kannel Kannel
+		From   string
+		To     string
+		Text   string
 	}
-
-	UserName = "test"
-	Password = "test"
-	Address = "127.0.0.1"
-
 	tests := []struct {
-		name string
-		args args
-		want string
+		name    string
+		fields  fields
+		want    string
+		wantErr bool
 	}{
-		{"Kannel request string", args{from: "1040", to: "+996555555555", text: "test message"}, "http://127.0.0.1/cgi-bin/sendsms?username=test&password=test&from=1040&to=+996555555555&text=test+message",},
+		{name: "test", fields: fields{
+			Kannel: Kannel{
+				URL:      "http://localhost.localdomain",
+				UserName: "test",
+				Password: "test"},
+			From: "1040",
+			To:   "+996555555555",
+			Text: "test text",
+		}, want: "http://localhost.localdomain?from=1040&password=test&text=test+text&to=%2B996555555555&username=test", wantErr: false},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := prepareRequest(tt.args.from, tt.args.to, tt.args.text); got != tt.want {
-				t.Errorf("prepareRequest() = %v, want %v", got, tt.want)
+		t1.Run(tt.name, func(t1 *testing.T) {
+			t := TextMessage{
+				Kannel: tt.fields.Kannel,
+				From:   tt.fields.From,
+				To:     tt.fields.To,
+				Text:   tt.fields.Text,
+			}
+			got, err := t.encodeURL()
+			if (err != nil) != tt.wantErr {
+				t1.Errorf("encodeURL() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t1.Errorf("encodeURL() got = %v, want %v", got, tt.want)
 			}
 		})
 	}
